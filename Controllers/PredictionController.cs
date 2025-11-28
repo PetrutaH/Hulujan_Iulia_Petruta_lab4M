@@ -1,20 +1,36 @@
 ﻿using Hulujan_Iulia_Petruta_lab4M;
+using Hulujan_Iulia_Petruta_lab4M.Models;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.ML;
-using  PriceModel=Hulujan_Iulia_Petruta_lab4M.PricePredictionModel; 
+using static Plotly.NET.StyleParam;
 using DurationModel= Hulujan_Iulia_Petruta_lab4M.DurationPredictionModel;
+using  PriceModel=Hulujan_Iulia_Petruta_lab4M.PricePredictionModel; 
 
 namespace Hulujan_Iulia_Petruta_lab4M.Controllers
 {
     public class PredictionController : Controller
     {
+        private readonly Hulujan_Iulia_Petruta_lab4M.Data.AppDbContext _context;
+
+        public PredictionController(Hulujan_Iulia_Petruta_lab4M.Data.AppDbContext context)
+        {
+            _context = context;
+        }
+        [HttpGet]
+        public IActionResult Price()
+        {
+            return View(new PricePredictionModel.ModelInput());
+        }
         //public IActionResult Index()
         //{
         //    return View();
         //}
 
-        public IActionResult Price(PriceModel.ModelInput input)
+        [HttpPost]
+        public async Task<IActionResult> Price(PriceModel.ModelInput input)
         {
+
             //Load the model
             MLContext mlContext = new MLContext();
             // Create prediction engine related to the loaded train model
@@ -25,9 +41,44 @@ namespace Hulujan_Iulia_Petruta_lab4M.Controllers
             PriceModel.ModelOutput result = predEngine.Predict(input);
 
             ViewBag.Price = result.Score;
+
+            if (!string.IsNullOrEmpty(Request.Form["save"]))
+            {
+                var history = new PredictionHistory
+                {
+                    PassengerCount = input.Passenger_count,
+                    TripTimeInSecs = input.Trip_time_in_secs,
+                    TripDistance = input.Trip_distance,
+                    PaymentType = input.Payment_type,
+                    PredictedPrice = result.Score,
+                    CreatedAt = DateTime.Now
+                };
+                _context.PredictionHistories.Add(history);
+                await _context.SaveChangesAsync();
+
+                ViewBag.Message = "Prediction saved successfully!";
+            }
+            else
+            {
+                ViewBag.Message = "Prediction not saved.";
+
+
+            }
+
+
             return View(input);
         }
+
         
+        [HttpGet]
+        public async Task<IActionResult> History()
+        {
+            var history = await _context.PredictionHistories
+            .OrderByDescending(p => p.CreatedAt)
+            .ToListAsync();
+            return View(history);
+        }
+
         public IActionResult Duration(DurationModel.ModelInput input)
         {
             MLContext mlContext = new MLContext();
