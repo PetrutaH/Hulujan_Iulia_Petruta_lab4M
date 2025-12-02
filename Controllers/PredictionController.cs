@@ -42,41 +42,81 @@ namespace Hulujan_Iulia_Petruta_lab4M.Controllers
 
             ViewBag.Price = result.Score;
 
-            if (!string.IsNullOrEmpty(Request.Form["save"]))
+
+            var history = new PredictionHistory
             {
-                var history = new PredictionHistory
-                {
-                    PassengerCount = input.Passenger_count,
-                    TripTimeInSecs = input.Trip_time_in_secs,
-                    TripDistance = input.Trip_distance,
-                    PaymentType = input.Payment_type,
-                    PredictedPrice = result.Score,
-                    CreatedAt = DateTime.Now
-                };
-                _context.PredictionHistories.Add(history);
-                await _context.SaveChangesAsync();
+                PassengerCount = input.Passenger_count,
+                TripTimeInSecs = input.Trip_time_in_secs,
+                TripDistance = input.Trip_distance,
+                PaymentType = input.Payment_type,
+                PredictedPrice = result.Score,
+                CreatedAt = DateTime.Now
+            };
+            _context.PredictionHistories.Add(history);
+            await _context.SaveChangesAsync();
 
-                ViewBag.Message = "Prediction saved successfully!";
-            }
-            else
-            {
-                ViewBag.Message = "Prediction not saved.";
-
-
-            }
-
+            ViewBag.Message = "Prediction saved successfully!";
 
             return View(input);
         }
 
         
         [HttpGet]
-        public async Task<IActionResult> History()
+        public async Task<IActionResult> History(string? paymentType,
+float? minPrice,
+float? maxPrice,
+DateTime? startDate,
+DateTime? endDate,
+string? sortOrder)
         {
-            var history = await _context.PredictionHistories
-            .OrderByDescending(p => p.CreatedAt)
-            .ToListAsync();
-            return View(history);
+            var query = _context.PredictionHistories.AsQueryable();
+            if (!string.IsNullOrEmpty(paymentType))
+            {
+                query = query.Where(p => p.PaymentType == paymentType);
+            }
+            if (minPrice.HasValue)
+            {
+                query = query.Where(p => p.PredictedPrice >= minPrice.Value);
+            }
+            if (maxPrice.HasValue)
+            {
+                query = query.Where(p => p.PredictedPrice <= maxPrice.Value);
+            }
+
+            if (startDate.HasValue)
+            {
+                query = query.Where(p => p.CreatedAt >= startDate.Value);
+            }
+            if (endDate.HasValue)
+            {
+                query = query.Where(p => p.CreatedAt <= endDate.Value);
+            }
+
+
+            query = sortOrder switch
+            {
+                "price_asc" => query.OrderBy(p => p.PredictedPrice),
+                "price_desc" => query.OrderByDescending(p => p.PredictedPrice),
+                "date_asc" => query.OrderBy(p => p.CreatedAt),
+                "date_desc" => query.OrderByDescending(p => p.CreatedAt),
+                _ => query.OrderBy(p => p.PredictedPrice) //sortare default
+            };
+
+            ViewBag.CurrentPaymentType = paymentType;
+            ViewBag.CurrentMinPrice = minPrice;
+            ViewBag.CurrentMaxPrice = maxPrice;
+            ViewBag.CurrentSortOrder = sortOrder;
+            ViewBag.CurrentStartDate = startDate;
+            ViewBag.CurrentEndDate = endDate;
+
+
+            var result = await query.ToListAsync();
+            return View(result);
+
+            //var history = await _context.PredictionHistories
+            //.OrderByDescending(p => p.CreatedAt)
+            //.ToListAsync();
+            //return View(history);
         }
 
         public IActionResult Duration(DurationModel.ModelInput input)
